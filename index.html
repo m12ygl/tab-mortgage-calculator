@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en-GB">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TAB Mortgage Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: deal inputs on the left; a sticky deep-green quote panel on the right with both products, an LTV gauge,
+   then the full breakdown. Stacks to one column on phones. Palette follows TAB's orange and the green of its rate card. */
+:root {
+  --bg: #F2F0EB;
+  --surface: #FFFFFF;
+  --sunk: #F6F4F0;
+  --ink: #13201A;
+  --muted: #65706A;
+  --line: #E1DDD5;
+  --brand: #E65C00;
+  --brand-soft: #FCE8D8;
+  --forest: #0F2B20;
+  --forest-2: #17392B;
+  --forest-line: #2A4D3D;
+  --on-forest: #EDF4EF;
+  --on-forest-muted: #9BB7A7;
+  --mint: #86D9A6;
+  --good: #2E7A4B; --good-soft: #E2F1E7;
+  --warn: #965800; --warn-soft: #FBEFD8;
+  --bad: #B42318; --bad-soft: #FCEAE8;
+  --display: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --r-lg: 18px; --r-md: 12px; --r-sm: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0C1310; --surface: #131C18; --sunk: #18231E; --ink: #E8EFEA; --muted: #92A299; --line: #25322C;
+    --brand: #FF7A26; --brand-soft: #3A2416; --forest: #0E271C; --forest-2: #143326; --forest-line: #2A4A3B;
+    --on-forest: #EAF2EC; --on-forest-muted: #93B19F; --mint: #8EE0AE;
+    --good: #7DCB98; --good-soft: #17281E; --warn: #F0B45A; --warn-soft: #2D2310; --bad: #F2867C; --bad-soft: #341715;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0C1310; --surface: #131C18; --sunk: #18231E; --ink: #E8EFEA; --muted: #92A299; --line: #25322C;
+  --brand: #FF7A26; --brand-soft: #3A2416; --forest: #0E271C; --forest-2: #143326; --forest-line: #2A4A3B;
+  --on-forest: #EAF2EC; --on-forest-muted: #93B19F; --mint: #8EE0AE;
+  --good: #7DCB98; --good-soft: #17281E; --warn: #F0B45A; --warn-soft: #2D2310; --bad: #F2867C; --bad-soft: #341715;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--display); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric: tabular-nums; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { width: 44px; height: 44px; border-radius: 13px; background: var(--brand); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; letter-spacing: .02em; box-shadow: 0 6px 16px -6px rgba(230, 92, 0, .6); }
+.brand h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+.brand p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.top-actions { display: flex; align-items: center; gap: 10px; }
+.pill-internal { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); background: var(--bad-soft); border-radius: 99px; padding: 5px 10px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: border-color .15s, background .15s; }
+.btn:hover { border-color: var(--muted); }
+.btn svg { width: 16px; height: 16px; }
+.btn .count { background: var(--brand); color: #fff; border-radius: 99px; font-size: 11px; padding: 1px 7px; font-weight: 700; }
+.btn.ghost { background: transparent; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Input cards */
+.inputs { display: grid; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.card-head h2 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.card-head .aside { font-size: 12px; color: var(--muted); }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > label, .lbl { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ctrl { width: 100%; background: var(--sunk); border: 1px solid transparent; border-radius: 10px; padding: 11px 12px; font-size: 15px; font-weight: 500; transition: border-color .15s, background .15s; }
+.ctrl:hover { border-color: var(--line); }
+.ctrl:focus { outline: none; border-color: var(--brand); background: var(--surface); }
+select.ctrl { appearance: none; padding-right: 34px; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.money { position: relative; }
+.money > span { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); font-weight: 600; pointer-events: none; }
+.money .ctrl { padding-left: 28px; font-size: 18px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--sunk); border-radius: 11px; padding: 4px; gap: 4px; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; text-align: center; padding: 8px 6px; border-radius: 8px; font-weight: 600; font-size: 14px; color: var(--muted); transition: background .15s, color .15s; }
+.seg input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.seg input:focus-visible + span { outline: 2px solid var(--brand); }
+
+.stepper { display: grid; grid-template-columns: 40px 1fr 40px; background: var(--sunk); border-radius: 10px; overflow: hidden; }
+.stepper button { border: 0; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); }
+.stepper button:hover { color: var(--ink); background: var(--line); }
+.stepper input { border: 0; background: transparent; text-align: center; font-weight: 700; font-size: 15px; width: 100%; padding: 10px 0; -moz-appearance: textfield; }
+.stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input:focus { outline: none; }
+
+/* Switch and chips */
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; padding: 12px 14px; background: var(--sunk); border-radius: 12px; }
+.switch .s-text { display: grid; }
+.switch .s-text b { font-size: 14px; }
+.switch .s-text small { font-size: 12px; color: var(--muted); }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.track { flex: none; width: 42px; height: 24px; border-radius: 99px; background: var(--line); position: relative; transition: background .2s; }
+.track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .2s; }
+.switch input:checked ~ .track { background: var(--brand); }
+.switch input:checked ~ .track::after { transform: translateX(18px); }
+.switch input:focus-visible ~ .track { outline: 2px solid var(--brand); outline-offset: 2px; }
+.switch input:disabled ~ .track { opacity: .75; }
+.chip-group { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-t { position: relative; cursor: pointer; }
+.chip-t input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip-t span { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 99px; font-size: 13px; font-weight: 600; background: var(--surface); transition: background .15s, border-color .15s, color .15s; }
+.chip-t em { font-style: normal; font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.chip-t span::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--line); flex: none; transition: all .15s; }
+.chip-t:hover span { border-color: var(--muted); }
+.chip-t input:checked + span { background: var(--brand-soft); border-color: var(--brand); color: var(--ink); }
+.chip-t input:checked + span::before { border-color: var(--brand); background: var(--brand) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.5l2.5 2.5L12 5.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.chip-t input:checked + span em { color: var(--brand); }
+.chip-t input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.chip-t input:disabled { cursor: not-allowed; }
+.chip-t input:disabled + span { opacity: .6; }
+.chip-t input:disabled:checked + span { opacity: 1; }
+.chip-t.green input:checked + span { background: var(--good-soft); border-color: var(--good); }
+.chip-t.green input:checked + span::before { background-color: var(--good); border-color: var(--good); }
+.chip-t.green input:checked + span em { color: var(--good); }
+.loading-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 14px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--muted); }
+.loading-total b { font-size: 20px; color: var(--ink); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.loading-total b.on { color: var(--brand); }
+
+/* Quote panel */
+.results { display: grid; gap: 16px; min-width: 0; position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); }
+@media (max-width: 960px) { .results { position: static; } }
+.hero { position: relative; overflow: hidden; background: var(--forest); color: var(--on-forest); border-radius: 22px; padding: 22px 24px 24px; display: grid; gap: 22px; border: 1px solid var(--forest-line); }
+.hero::before { content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; height: 140%; background: radial-gradient(closest-side, rgba(134, 217, 166, .16), transparent); pointer-events: none; }
+.hero > * { position: relative; }
+.hero-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--on-forest-muted); }
+.hero-meta { font-size: 13px; color: var(--on-forest-muted); }
+.products { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 560px) { .products { grid-template-columns: minmax(0, 1fr); } }
+.prod { background: var(--forest-2); border: 1px solid var(--forest-line); border-radius: 16px; padding: 16px 18px; display: grid; gap: 12px; min-width: 0; }
+.prod.lead { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+.prod-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.prod-name { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.dot.std { background: var(--mint); }
+.dot.pro { background: var(--brand); }
+.tag { font-family: var(--mono); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+.tag.ltv { background: rgba(134, 217, 166, .16); color: var(--mint); }
+.tag.icr { background: rgba(240, 180, 90, .16); color: #F3C47A; }
+.tag.fail { background: rgba(242, 134, 124, .16); color: #F4A39A; }
+.big-label { font-size: 12px; color: var(--on-forest-muted); }
+.big { font-size: clamp(30px, 4vw, 40px); font-weight: 800; letter-spacing: -.035em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.prod.lead .big { color: #FFB27A; }
+.mini { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding-top: 12px; border-top: 1px solid var(--forest-line); }
+.mini div { display: grid; gap: 1px; min-width: 0; }
+.mini span { font-size: 11.5px; color: var(--on-forest-muted); }
+.mini b { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.prod-empty { font-size: 13.5px; color: var(--on-forest-muted); line-height: 1.5; }
+.prod-empty strong { color: var(--on-forest); }
+.more { font-size: 12.5px; color: var(--mint); }
+
+.gauge { display: grid; gap: 8px; }
+.gauge-head { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--on-forest-muted); flex-wrap: wrap; }
+.gauge-track { position: relative; padding-top: 18px; }
+.bands { display: flex; gap: 3px; height: 34px; }
+.band { border-radius: 7px; background: rgba(255, 255, 255, .06); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 11.5px; color: var(--on-forest-muted); min-width: 0; overflow: hidden; white-space: nowrap; transition: background .2s; }
+.band.on { background: rgba(134, 217, 166, .2); color: var(--on-forest); }
+.band.off { background: repeating-linear-gradient(135deg, rgba(255, 255, 255, .05) 0 5px, transparent 5px 10px); color: rgba(255, 255, 255, .3); }
+.band-scale { display: flex; gap: 3px; font-family: var(--mono); font-size: 10.5px; color: var(--on-forest-muted); }
+.band-scale span { min-width: 0; overflow: hidden; white-space: nowrap; }
+.marker { position: absolute; top: 0; bottom: 0; width: 0; }
+.marker::before { content: ""; position: absolute; top: 12px; bottom: -4px; left: -1px; width: 2px; border-radius: 2px; }
+.marker::after { content: ""; position: absolute; top: 4px; left: -6px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--forest); }
+.marker.std::before, .marker.std::after { background: var(--mint); }
+.marker.pro::before, .marker.pro::after { background: var(--brand); }
+.cap-line { position: absolute; top: 14px; bottom: -4px; width: 0; border-left: 2px dashed rgba(255, 255, 255, .45); }
+.hero-stop { display: grid; gap: 6px; padding: 8px 0; }
+.hero-stop b { font-size: 20px; }
+.hero-stop span { color: var(--on-forest-muted); }
+
+.notes { display: grid; gap: 8px; }
+.note { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; font-size: 13.5px; }
+.note svg { width: 18px; height: 18px; margin-top: 1px; }
+.note b { display: block; font-size: 14px; }
+.note span { color: var(--muted); }
+.note.warn svg { color: var(--warn); }
+.note.stop svg { color: var(--bad); }
+.note.info svg { color: var(--good); }
+.note.stop { border-color: var(--bad); background: var(--bad-soft); }
+
+.breakdown { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+.breakdown-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.breakdown-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.bd-cols { display: grid; grid-template-columns: 1fr 1fr; }
+@media (max-width: 560px) { .bd-cols { grid-template-columns: minmax(0, 1fr); } }
+.bd-col { padding: 6px 20px 18px; min-width: 0; }
+.bd-col + .bd-col { border-left: 1px solid var(--line); }
+@media (max-width: 560px) { .bd-col + .bd-col { border-left: 0; border-top: 1px solid var(--line); } }
+.bd-col h3 { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 14px; }
+.bd-col .dot.std { background: var(--good); }
+dl.lines { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; font-size: 13.5px; }
+dl.lines dt, dl.lines dd { margin: 0; padding: 7px 0; border-bottom: 1px solid var(--sunk); }
+dl.lines dt { color: var(--muted); }
+dl.lines dd { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+dl.lines .grp { grid-column: 1 / -1; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 14px 0 4px; border: 0; }
+dl.lines .total { color: var(--ink); font-weight: 800; font-size: 15px; border-bottom: 0; padding-top: 10px; }
+dl.lines dd.pass { color: var(--good); }
+dl.lines dd.failv { color: var(--bad); }
+dl.lines .sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+.bd-empty { color: var(--muted); font-size: 13.5px; padding: 8px 0; }
+
+.foot { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 8px; max-width: 90ch; }
+.foot p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.foot strong { color: var(--ink); }
+
+/* Settings drawer */
+.scrim { position: fixed; inset: 0; background: rgba(5, 15, 10, .45); z-index: 20; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 100%); background: var(--surface); z-index: 21; display: flex; flex-direction: column; box-shadow: -16px 0 40px rgba(0, 0, 0, .18); }
+.drawer:focus { outline: none; }
+.drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: calc(20px + env(safe-area-inset-top, 0px)) max(22px, env(safe-area-inset-right, 0px)) 16px 22px; border-bottom: 1px solid var(--line); }
+.drawer-head h2 { margin: 0 0 4px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.drawer-head p { margin: 0; }
+.drawer-body { overflow-y: auto; padding: 4px max(22px, env(safe-area-inset-right, 0px)) 22px 22px; flex: 1; display: grid; align-content: start; }
+.drawer-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px max(22px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) 22px; border-top: 1px solid var(--line); }
+.sgroup { border-bottom: 1px solid var(--line); padding: 16px 0 18px; display: grid; gap: 10px; }
+.sgroup:last-child { border-bottom: 0; }
+.sgroup h3 { margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: center; gap: 12px; font-size: 14px; }
+.srow.band-row { grid-template-columns: minmax(0, 1fr) 92px 112px; }
+.srow label { min-width: 0; }
+.srow.changed label::after { content: " · changed"; color: var(--brand); font-size: 12px; font-weight: 700; }
+.unit { position: relative; }
+.unit input { width: 100%; background: var(--sunk); border: 1px solid transparent; border-radius: 9px; padding: 8px 28px 8px 10px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.unit input:focus { outline: none; border-color: var(--brand); background: var(--surface); }
+.unit.pre input { padding: 8px 10px 8px 24px; }
+.unit span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+.unit.pre span { right: auto; left: 10px; }
+.srow.changed input { border-color: var(--brand); }
+.bandhead { display: grid; grid-template-columns: minmax(0, 1fr) 92px 112px; gap: 12px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+</style>
+
+<div class="wrap">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">TAB.</div>
+      <div>
+        <h1>Mortgage calculator</h1>
+        <p>Buy-to-let and commercial term loans</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span class="pill-internal">Internal only</span>
+      <button type="button" class="btn" id="open-settings" aria-controls="settings" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        Settings<span class="count" id="changed-count" hidden></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <form class="inputs" id="form" autocomplete="off">
+      <section class="card">
+        <div class="card-head"><h2>Property</h2></div>
+        <div class="seg" role="radiogroup" aria-label="Property category">
+          <label><input type="radio" name="cat" id="cat-res" value="residential" checked><span>Buy-to-let</span></label>
+          <label><input type="radio" name="cat" id="cat-com" value="commercial"><span>Commercial</span></label>
+          <label><input type="radio" name="cat" id="cat-mix" value="mixed"><span>Mixed use</span></label>
+        </div>
+        <div class="field" id="type-field">
+          <label for="ptype">Property type</label>
+          <select class="ctrl" id="ptype"></select>
+        </div>
+        <div class="field" id="mix-field" hidden>
+          <span class="lbl" id="mix-lbl">Larger share by floor area (sq ft)</span>
+          <div class="seg" role="radiogroup" aria-labelledby="mix-lbl">
+            <label><input type="radio" name="mix" id="mix-res" value="residential" checked><span>Residential</span></label>
+            <label><input type="radio" name="mix" id="mix-com" value="commercial"><span>Commercial</span></label>
+          </div>
+          <span class="hint" id="mix-hint"></span>
+        </div>
+        <div class="field">
+          <label for="loc">Location</label>
+          <select class="ctrl" id="loc">
+            <option value="london">London boroughs</option>
+            <option value="england" selected>England (excl. London)</option>
+            <option value="wales">Wales</option>
+            <option value="scotland">Scotland (mainland)</option>
+            <option value="ni">Northern Ireland</option>
+            <option value="scotland_rural">Scotland (rural/islands)</option>
+            <option value="outside_uk">Outside UK</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="value">Property value</label>
+          <div class="money"><span>£</span><input class="ctrl" type="text" inputmode="numeric" id="value" value="450,000"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Income and term</h2></div>
+        <div class="field">
+          <label for="rent">Monthly rent (gross)</label>
+          <div class="money"><span>£</span><input class="ctrl" type="text" inputmode="numeric" id="rent" value="3,200"></div>
+          <span class="hint">Leave blank to see the rent needed for maximum LTV.</span>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <span class="lbl" id="term-lbl">Term</span>
+            <div class="seg" role="radiogroup" aria-labelledby="term-lbl">
+              <label><input type="radio" name="term" id="term-3" value="3"><span>3 yr</span></label>
+              <label><input type="radio" name="term" id="term-4" value="4"><span>4 yr</span></label>
+              <label><input type="radio" name="term" id="term-5" value="5" checked><span>5 yr</span></label>
+            </div>
+          </div>
+          <div class="field">
+            <label for="props">Properties</label>
+            <div class="stepper">
+              <button type="button" id="props-down" aria-label="One fewer property">−</button>
+              <input type="number" id="props" min="1" max="50" value="1">
+              <button type="button" id="props-up" aria-label="One more property">+</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Rate loadings</h2><span class="aside">Core Flex only</span></div>
+        <label class="switch">
+          <span class="s-text"><b>Core Flex pricing</b><small>Turns on with any loading below</small></span>
+          <input type="checkbox" id="cf-on">
+          <span class="track" aria-hidden="true"></span>
+        </label>
+        <div class="chip-group">
+          <span class="lbl">Borrower and credit</span>
+          <div class="chips">
+            <label class="chip-t"><input type="checkbox" id="cf-ccj"><span>CCJ <em data-cfg="coreFlex.loadings.ccj" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-arrears"><span>Mortgage arrears <em data-cfg="coreFlex.loadings.arrears" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-offshore"><span>Offshore / foreign national <em data-cfg="coreFlex.loadings.offshore" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-complex"><span>Complex ownership <em data-cfg="coreFlex.loadings.complex" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-nopg"><span>No personal guarantee <em data-cfg="coreFlex.loadings.nopg" data-fmt="plus"></em></span></label>
+          </div>
+        </div>
+        <div class="chip-group">
+          <span class="lbl">Property and works</span>
+          <div class="chips">
+            <label class="chip-t"><input type="checkbox" id="cf-nonstd"><span>Non-standard construction <em data-cfg="coreFlex.loadings.nonstd" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-refurb"><span>Light refurbishment <em data-cfg="coreFlex.loadings.refurb" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-tier1"><span>Specialist Tier 1 <em data-cfg="coreFlex.tier.1" data-fmt="plus"></em></span></label>
+            <label class="chip-t"><input type="checkbox" id="cf-tier2"><span>Specialist Tier 2 <em data-cfg="coreFlex.tier.2" data-fmt="plus"></em></span></label>
+          </div>
+          <span class="hint" id="cf-tier-note"></span>
+        </div>
+        <div class="loading-total"><span id="cf-sum"></span><b id="cf-total">+0.00%</b></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>ESG discounts</h2><span class="aside">Off the exit fee</span></div>
+        <div class="chips">
+          <label class="chip-t green"><input type="checkbox" id="esg-epc"><span>EPC A, B or C <em data-cfg="esg.epc" data-fmt="minus"></em></span></label>
+          <label class="chip-t green"><input type="checkbox" id="esg-sus"><span>Sustainability <em data-cfg="esg.sus" data-fmt="minus"></em></span></label>
+          <label class="chip-t green"><input type="checkbox" id="esg-soc"><span>Social enterprise <em data-cfg="esg.soc" data-fmt="minus"></em></span></label>
+        </div>
+      </section>
+      <p class="hint" id="assume-line"></p>
+    </form>
+
+    <section class="results" aria-live="polite">
+      <div class="hero" id="hero"></div>
+      <div class="notes" id="alerts"></div>
+      <div class="breakdown" id="breakdown"></div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <p><strong>Illustrative only.</strong> This is not a mortgage offer, an agreement in principle or financial advice. Margins and Core Flex loadings come from TAB's internal Mortgage Rate Card; do not share this page outside TAB. Loans run from <span id="fn-min"></span> to <span id="fn-max"></span>, first charge only, with interest-only repayments. Every case is subject to valuation, underwriting and credit approval, and final terms may differ. Rates track base rate, so payments can go up as well as down.</p>
+    <p>TAB loans are unregulated. Any property used as security is at risk of repossession if you do not keep up with your payments. You are advised to obtain appropriate professional advice.</p>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="settings" hidden aria-label="Settings" tabindex="-1">
+  <div class="drawer-head">
+    <div>
+      <h2>Settings</h2>
+      <p class="hint">Changes apply straight away and are saved in this browser only. Values that differ from the rate card are marked.</p>
+    </div>
+    <button type="button" class="btn ghost" id="close-settings">Close</button>
+  </div>
+  <div class="drawer-body" id="settings-body"></div>
+  <div class="drawer-foot">
+    <button type="button" class="btn" id="reset-settings">Reset to rate card</button>
+    <span class="hint" id="reset-note"></span>
+  </div>
+</aside>
+
+<script>
+// Rate card defaults. Everything here except `types` and `rejected` can be changed in Settings.
+const CONFIG = {
+  base: 4.0, icr: 1.25, stressAddOn: 1, prepaidPct: 2,
+  limits: { minLoan: 100000, maxLoan: 5000000, referral: 4000000, minValue: 150000, maxLtv: { residential: 75, commercial: 70 } },
+  maxValue: { london: { residential: 3000000, commercial: 7750000 }, other: { residential: 2000000, commercial: 7750000 } },
+  rejected: { ni: 'Northern Ireland', scotland_rural: 'rural Scotland and the islands', outside_uk: 'property outside the UK' },
+  fees: { arrangementPct: 2, exitPct: 2, admin: 1000, adminPro: 2500, adminPerExtra: 1000, valuation: 999 },
+  esg: { epc: 0.33, sus: 0.33, soc: 0.33 },
+  margins: {
+    residential: [ { maxLtv: 50, margin: 3.5 }, { maxLtv: 60, margin: 4.0 }, { maxLtv: 70, margin: 4.5 }, { maxLtv: 75, margin: 5.0 } ],
+    commercial:  [ { maxLtv: 50, margin: 4.0 }, { maxLtv: 60, margin: 4.5 }, { maxLtv: 70, margin: 5.0 } ],
+  },
+  // Internal Mortgage Rate Card: Core Flex pricing adjustments (cumulative, capped).
+  coreFlex: {
+    base: 1.0, cap: 3.0, pricingReferral: 2500000,
+    loadings: { ccj: 0.5, arrears: 1.0, offshore: 0.5, complex: 0.5, nopg: 0.5, nonstd: 0.5, refurb: 0.5 },
+    tier: { 1: 0.25, 2: 0.75 },
+  },
+  specialistMaxLtv: 65,
+  // [value, label, specialist tier (0 = standard)]
+  types: {
+    residential: [
+      ['residential_investment', 'Residential investment', 0], ['hmo', 'HMO (up to 8 beds)', 0], ['large_hmo', 'Large HMO (over 8 beds)', 1],
+      ['mufb', 'Multi-unit freehold block', 0], ['holiday_let', 'Holiday let / Airbnb', 2],
+    ],
+    commercial: [
+      ['office', 'Office', 0], ['warehouse', 'Warehouse', 0], ['industrial', 'Industrial unit', 0], ['industrial_planning', 'Industrial unit needing planning', 1],
+      ['retail', 'Retail unit (incl. lock-ups)', 1], ['garage', 'Garage / vehicle showroom', 1], ['professional', 'Professional practice', 1],
+      ['food', 'Food outlet', 1], ['pub', 'Pub', 2], ['hotel', 'Hotel / B&B', 2], ['education', 'Education', 2], ['care', 'Care (any element)', 2],
+      ['pbsa', 'Student accommodation (PBSA)', 2], ['land', 'Land with planning', 2], ['restricted', 'Restricted use', 2],
+    ],
+    // Mixed use is priced on whichever grid covers the larger floor area.
+    mixed: [ ['mixed_use', 'Mixed use', 0] ],
+  },
+};
+
+const $ = id => document.getElementById(id);
+const gbp = n => '£' + Math.round(n).toLocaleString('en-GB');
+const pct = (n, dp = 2) => n.toFixed(dp) + '%';
+const num = s => parseFloat(String(s).replace(/[^0-9.]/g, '')) || 0;
+
+// ---------- Settings: defaults, saved overrides, path helpers ----------
+const DEFAULTS = JSON.parse(JSON.stringify(CONFIG));
+const STORE_KEY = 'tab-mortgage-settings-v1';
+const getPath = (obj, path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), obj);
+const setPath = (obj, path, v) => { const ks = path.split('.'); const last = ks.pop(); ks.reduce((o, k) => o[k], obj)[last] = v; };
+
+const PCT = (path, label, step = 0.05) => ({ path, label, unit: '%', step });
+const GBP = (path, label) => ({ path, label, unit: '£', step: 1000 });
+const SETTINGS = [
+  { title: 'Base rate and rent test', note: 'Base rate has been 4.00% since 5 Nov 2026. Next MPC decision 17 Dec 2026.', items: [
+    PCT('base', 'BoE base rate', 0.01), { path: 'icr', label: 'ICR required', unit: '×', step: 0.05 },
+    PCT('stressAddOn', 'Stress rate add-on'), PCT('prepaidPct', 'Mortgage Pro prepaid interest (a year)'),
+  ] },
+  { title: 'Buy-to-let margins over base', bands: 'residential' },
+  { title: 'Commercial margins over base', bands: 'commercial' },
+  { title: 'Maximum LTV', items: [
+    PCT('limits.maxLtv.residential', 'Buy-to-let', 1), PCT('limits.maxLtv.commercial', 'Commercial', 1), PCT('specialistMaxLtv', 'Specialist assets (Tier 1 and 2)', 1),
+  ] },
+  { title: 'Core Flex loadings', items: [
+    PCT('coreFlex.base', 'Core Flex'), PCT('coreFlex.loadings.ccj', 'Adverse credit: CCJ'), PCT('coreFlex.loadings.arrears', 'Adverse credit: incl. mortgage arrears'),
+    PCT('coreFlex.loadings.offshore', 'Offshore borrower / foreign national'), PCT('coreFlex.loadings.complex', 'Complex ownership structure'),
+    PCT('coreFlex.loadings.nopg', 'No personal guarantee'), PCT('coreFlex.loadings.nonstd', 'Non-standard construction'),
+    PCT('coreFlex.loadings.refurb', 'Light refurbishment works'), PCT('coreFlex.tier.1', 'Specialist asset: Tier 1'), PCT('coreFlex.tier.2', 'Specialist asset: Tier 2'),
+    PCT('coreFlex.cap', 'Total loading cap'),
+  ] },
+  { title: 'Fees', items: [
+    PCT('fees.arrangementPct', 'Arrangement fee'), PCT('fees.exitPct', 'Exit fee'), GBP('fees.admin', 'Admin fee'), GBP('fees.adminPro', 'Admin fee (Mortgage Pro)'),
+    GBP('fees.adminPerExtra', 'Admin fee per extra property'), { ...GBP('fees.valuation', 'Valuation fee'), step: 1 },
+  ] },
+  { title: 'ESG exit fee discounts', items: [ PCT('esg.epc', 'EPC A, B or C', 0.01), PCT('esg.sus', 'Sustainability improvements', 0.01), PCT('esg.soc', 'Social enterprise', 0.01) ] },
+  { title: 'Loan and property limits', items: [
+    GBP('limits.minLoan', 'Minimum loan'), GBP('limits.maxLoan', 'Maximum loan'), GBP('coreFlex.pricingReferral', 'Pricing Committee above'),
+    GBP('limits.referral', 'Credit referral above'), GBP('limits.minValue', 'Minimum property value'),
+    GBP('maxValue.london.residential', 'Max value: London buy-to-let'), GBP('maxValue.other.residential', 'Max value: elsewhere buy-to-let'),
+    GBP('maxValue.london.commercial', 'Max value: London commercial'), GBP('maxValue.other.commercial', 'Max value: elsewhere commercial'),
+  ] },
+];
+
+// Every editable path, including the margin bands.
+function allPaths() {
+  const paths = [];
+  for (const g of SETTINGS) {
+    if (g.bands) CONFIG.margins[g.bands].forEach((_, i) => paths.push(`margins.${g.bands}.${i}.maxLtv`, `margins.${g.bands}.${i}.margin`));
+    else g.items.forEach(it => paths.push(it.path));
+  }
+  return paths;
+}
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    for (const [path, v] of Object.entries(saved)) {
+      if (typeof v === 'number' && isFinite(v) && getPath(DEFAULTS, path) !== undefined) setPath(CONFIG, path, v);
+    }
+  } catch (e) { /* storage unavailable: use rate card defaults */ }
+}
+
+// Save only the values that differ from the rate card.
+function saveSettings() {
+  const diff = {};
+  for (const p of allPaths()) if (getPath(CONFIG, p) !== getPath(DEFAULTS, p)) diff[p] = getPath(CONFIG, p);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(diff)); } catch (e) { /* not saved; still applies for this visit */ }
+  return Object.keys(diff).length;
+}
+
+function settingRow(path, label, unit, step) {
+  const v = getPath(CONFIG, path);
+  const id = 'set-' + path.replace(/\./g, '-');
+  const changed = v !== getPath(DEFAULTS, path);
+  const pre = unit === '£';
+  return `<div class="srow${changed ? ' changed' : ''}">
+    <label for="${id}">${label}</label>
+    <div class="unit${pre ? ' pre' : ''}"><input type="number" id="${id}" data-path="${path}" step="${step}" value="${v}"><span>${unit}</span></div>
+  </div>`;
+}
+
+function renderSettings() {
+  $('settings-body').innerHTML = SETTINGS.map(g => {
+    let body;
+    if (g.bands) {
+      body = `<div class="bandhead"><span>Band</span><span>Up to LTV</span><span>Margin</span></div>` +
+        CONFIG.margins[g.bands].map((b, i) => {
+          const pl = `margins.${g.bands}.${i}`;
+          const idb = 'set-' + pl.replace(/\./g, '-');
+          const changed = b.maxLtv !== DEFAULTS.margins[g.bands][i].maxLtv || b.margin !== DEFAULTS.margins[g.bands][i].margin;
+          return `<div class="srow band-row${changed ? ' changed' : ''}">
+            <label for="${idb}-margin">Band ${i + 1}</label>
+            <div class="unit"><input type="number" id="${idb}-maxLtv" aria-label="Band ${i + 1} maximum LTV" data-path="${pl}.maxLtv" step="1" value="${b.maxLtv}"><span>%</span></div>
+            <div class="unit"><input type="number" id="${idb}-margin" data-path="${pl}.margin" step="0.05" value="${b.margin}"><span>%</span></div>
+          </div>`;
+        }).join('');
+    } else {
+      body = g.items.map(it => settingRow(it.path, it.label, it.unit, it.step)).join('');
+    }
+    return `<section class="sgroup"><h3>${g.title}</h3>${g.note ? `<p class="hint">${g.note}</p>` : ''}${body}</section>`;
+  }).join('');
+}
+
+function updateChangedCount(n) {
+  $('changed-count').hidden = n === 0;
+  $('changed-count').textContent = n ? `${n} changed` : '';
+}
+
+// Labels across the page that show a configured value.
+function refreshLabels() {
+  document.querySelectorAll('[data-cfg]').forEach(el => {
+    const v = getPath(CONFIG, el.dataset.cfg);
+    el.textContent = (el.dataset.fmt === 'minus' ? '−' : '+') + pct(v);
+  });
+  $('fn-min').textContent = gbp(CONFIG.limits.minLoan);
+  $('fn-max').textContent = gbp(CONFIG.limits.maxLoan);
+  $('assume-line').textContent = `Base rate ${pct(CONFIG.base)} · ICR ${CONFIG.icr}× at pay rate + ${pct(CONFIG.stressAddOn)} · Core Flex +${pct(CONFIG.coreFlex.base)}, loadings capped at +${pct(CONFIG.coreFlex.cap)}. Change any of these in Settings.`;
+}
+
+// ---------- Calculation ----------
+function marginFor(ltv, tiers) {
+  for (const t of tiers) if (ltv <= t.maxLtv + 1e-9) return t.margin;
+  return null;
+}
+
+function calculate(s) {
+  const tiers = CONFIG.margins[s.cat];
+  const maxLtv = s.tier ? Math.min(CONFIG.specialistMaxLtv, CONFIG.limits.maxLtv[s.cat]) : CONFIG.limits.maxLtv[s.cat];
+  const maxLtvLoan = Math.min(s.value * maxLtv / 100, CONFIG.limits.maxLoan);
+  const startLoan = Math.floor(maxLtvLoan / 1000) * 1000;
+
+  const pricing = (loan, pro) => {
+    const ltv = loan / s.value * 100;
+    const margin = marginFor(ltv, tiers);
+    if (margin === null) return null;
+    const pay = margin + s.loading + s.base;
+    const eff = pro ? pay - CONFIG.prepaidPct : pay;
+    return { ltv, margin, loading: s.loading, pay, eff, stress: eff + CONFIG.stressAddOn };
+  };
+  const rentNeeded = (loan, p) => Math.ceil(loan * p.stress / 100 * s.icr / 12);
+
+  // Highest loan (in £1,000 steps) that passes the ICR test, starting from maximum LTV.
+  const maxForRent = pro => {
+    if (s.value <= 0 || startLoan < CONFIG.limits.minLoan) return { loan: 0, limited: 'none' };
+    if (s.rent <= 0) return { loan: startLoan, limited: 'ltv' };
+    for (let loan = startLoan; loan >= CONFIG.limits.minLoan; loan -= 1000) {
+      const p = pricing(loan, pro);
+      if (!p) continue;
+      if (s.rent * 12 / (loan * p.stress / 100) >= s.icr) return { loan, limited: loan >= startLoan - 1000 ? 'ltv' : 'icr' };
+    }
+    return { loan: 0, limited: 'icr_fail' };
+  };
+
+  const quote = pro => {
+    const max = maxForRent(pro);
+    const loan = max.loan;
+    const atMax = pricing(startLoan, pro);
+    const out = { pro, limited: max.limited, rentForMax: atMax ? rentNeeded(startLoan, atMax) : 0 };
+    if (loan < CONFIG.limits.minLoan) return { ...out, loan: 0 };
+    const p = pricing(loan, pro);
+    const years = s.term;
+    const arrangement = loan * CONFIG.fees.arrangementPct / 100;
+    const admin = (pro ? CONFIG.fees.adminPro : CONFIG.fees.admin) + Math.max(0, s.props - 1) * CONFIG.fees.adminPerExtra;
+    const valuation = CONFIG.fees.valuation;
+    const prepaid = pro ? loan * CONFIG.prepaidPct / 100 * years : 0;
+    const exitPct = Math.max(0, CONFIG.fees.exitPct - s.esgDiscount);
+    const exit = loan * exitPct / 100;
+    const monthly = loan * p.eff / 100 / 12;
+    const icrAchieved = s.rent > 0 ? (s.rent * 12) / (loan * p.stress / 100) : null;
+    return {
+      ...out, loan, ...p, years, arrangement, admin, valuation, prepaid, exitPct, exit, monthly, icrAchieved,
+      rentForLoan: rentNeeded(loan, p),
+      net: loan - arrangement - admin - valuation - prepaid,
+      totalCost: monthly * 12 * years + prepaid + arrangement + admin + valuation + exit,
+    };
+  };
+
+  return { maxLtv, maxLtvLoan, startLoan, tiers, std: quote(false), pro: quote(true) };
+}
+
+// ---------- Inputs ----------
+const CF_FLAGS = ['ccj', 'arrears', 'offshore', 'complex', 'nopg', 'nonstd', 'refurb'];
+let cfManual = false; // Core Flex switched on by hand, with no loadings
+const ESG_KEYS = { 'esg-epc': 'epc', 'esg-sus': 'sus', 'esg-soc': 'soc' };
+
+function typeTier() {
+  const opt = $('ptype').selectedOptions[0];
+  return opt ? parseInt(opt.dataset.tier, 10) || 0 : 0;
+}
+const typeName = () => ($('ptype').selectedOptions[0]?.textContent || '').replace(/ · Tier \d$/, '');
+
+// A specialist property type sets the tier itself, so the tier chips are locked to it
+// and the specialist loading can only be counted once.
+function syncTierFromType() {
+  const t = typeTier();
+  $('cf-tier1').checked = t === 1;
+  $('cf-tier2').checked = t === 2;
+  $('cf-tier1').disabled = $('cf-tier2').disabled = t > 0;
+  $('cf-tier-note').textContent = t > 0
+    ? `Set by property type: ${typeName()} is a Tier ${t} specialist asset (max ${CONFIG.specialistMaxLtv}% LTV).`
+    : 'Tick a tier only for an asset the list does not cover, such as one lacking planning or sign-offs.';
+}
+
+// Core Flex loading: Core Flex itself plus each adjustment, capped in total.
+function coreFlexLoading(tier, flags, forced) {
+  const parts = [...flags];
+  if (tier) parts.push(CONFIG.coreFlex.tier[tier]);
+  const on = forced || parts.length > 0;
+  if (!on) return { on: false, raw: 0, loading: 0, capped: false };
+  const raw = CONFIG.coreFlex.base + parts.reduce((a, b) => a + b, 0);
+  return { on: true, raw, loading: Math.min(raw, CONFIG.coreFlex.cap), capped: raw > CONFIG.coreFlex.cap + 1e-9 };
+}
+
+function readState() {
+  // One specialist tier only: the property type's tier wins, otherwise a manually ticked chip.
+  const tier = typeTier() || ($('cf-tier2').checked ? 2 : $('cf-tier1').checked ? 1 : 0);
+  const flags = CF_FLAGS.filter(k => $('cf-' + k).checked).map(k => CONFIG.coreFlex.loadings[k]);
+  const anyLoading = flags.length > 0 || tier > 0;
+  // Every loading is Core Flex only, so ticking one switches Core Flex on.
+  // It switches off again when the loadings are cleared, unless it was turned on by hand.
+  $('cf-on').checked = anyLoading || cfManual;
+  $('cf-on').disabled = anyLoading;
+  const cf = coreFlexLoading(tier, flags, $('cf-on').checked);
+  const kind = document.querySelector('input[name="cat"]:checked').value;
+  const mix = document.querySelector('input[name="mix"]:checked').value;
+  return {
+    tier, cf, loading: cf.loading, kind, mix,
+    // Mixed use takes the grid, LTV and value limits of its larger part by floor area.
+    cat: kind === 'mixed' ? mix : kind,
+    loc: $('loc').value,
+    value: num($('value').value),
+    rent: num($('rent').value),
+    term: parseInt(document.querySelector('input[name="term"]:checked').value, 10),
+    props: Math.max(1, parseInt($('props').value, 10) || 1),
+    esgDiscount: Object.entries(ESG_KEYS).filter(([id]) => $(id).checked).reduce((a, [, k]) => a + CONFIG.esg[k], 0),
+    base: CONFIG.base,
+    icr: CONFIG.icr,
+  };
+}
+
+function fillTypes() {
+  const cat = document.querySelector('input[name="cat"]:checked').value;
+  const prev = $('ptype').value;
+  $('ptype').innerHTML = CONFIG.types[cat].map(([v, l, t]) => `<option value="${v}" data-tier="${t}">${l}${t ? ` · Tier ${t}` : ''}</option>`).join('');
+  if ([...$('ptype').options].some(o => o.value === prev)) $('ptype').value = prev;
+  else if (cat === 'residential') $('ptype').value = 'hmo';
+  $('type-field').hidden = cat === 'mixed';
+  $('mix-field').hidden = cat !== 'mixed';
+}
+
+// ---------- Output ----------
+const ICONS = {
+  warn: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10 2.5 1.5 17.5h17L10 2.5Zm-.9 5h1.8v5H9.1v-5Zm0 6.3h1.8v1.8H9.1v-1.8Z"/></svg>',
+  stop: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M6 9h8v2H6z" fill="#fff"/></svg>',
+  info: '<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><circle cx="10" cy="10" r="8"/><path d="M9.1 9h1.8v5H9.1zM9.1 6h1.8v1.8H9.1z" fill="#fff"/></svg>',
+};
+const note = (kind, title, body) => `<div class="note ${kind}">${ICONS[kind]}<div><b>${title}</b><span>${body}</span></div></div>`;
+
+function limitTag(q) {
+  if (q.limited === 'ltv') return '<span class="tag ltv">Max LTV</span>';
+  if (q.limited === 'icr') return '<span class="tag icr">Rent limited</span>';
+  return '<span class="tag fail">Not viable</span>';
+}
+
+const productName = pro => pro ? 'Mortgage Pro' : 'Mortgage';
+
+function heroProduct(q, s, lead) {
+  const head = `<div class="prod-head"><span class="prod-name"><span class="dot ${q.pro ? 'pro' : 'std'}"></span>${productName(q.pro)}</span>${limitTag(q)}</div>`;
+  if (!q.loan) {
+    const reason = q.limited === 'icr_fail'
+      ? `The rent does not pass the ${s.icr}× rent test at the ${gbp(CONFIG.limits.minLoan)} minimum loan. It needs <strong>${gbp(q.rentForMax)}</strong> a month for maximum LTV.`
+      : `The property value does not support the ${gbp(CONFIG.limits.minLoan)} minimum loan.`;
+    return `<div class="prod">${head}<p class="prod-empty">${reason}</p></div>`;
+  }
+  return `<div class="prod${lead ? ' lead' : ''}">
+    ${head}
+    <div><div class="big-label">Gross loan</div><div class="big">${gbp(q.loan)}</div></div>
+    <div class="mini">
+      <div><span>Monthly interest</span><b>${gbp(q.monthly)}</b></div>
+      <div><span>Pay rate</span><b>${pct(q.pay)}</b></div>
+      <div><span>LTV</span><b>${pct(q.ltv, 1)}</b></div>
+      <div><span>Net advance</span><b>${gbp(q.net)}</b></div>
+    </div>
+  </div>`;
+}
+
+function gauge(r, s) {
+  const catMax = CONFIG.limits.maxLtv[s.cat];
+  const segs = [];
+  let from = 0;
+  for (const t of r.tiers) {
+    if (from >= catMax) break;
+    const to = Math.min(t.maxLtv, catMax);
+    const off = from >= r.maxLtv;
+    const active = [r.std, r.pro].some(q => q.loan && q.ltv > from + 1e-9 && q.ltv <= to + 1e-9);
+    segs.push({ from, to, off, active, rate: t.margin + s.loading + s.base });
+    from = t.maxLtv;
+  }
+  const bands = segs.map(g => `<div class="band${g.active ? ' on' : ''}${g.off ? ' off' : ''}" style="flex:${g.to - g.from}">${g.off ? 'n/a' : pct(g.rate)}</div>`).join('');
+  const scale = segs.map(g => `<span style="flex:${g.to - g.from}">${g.from === 0 ? 'Up to ' : ''}${g.to}%</span>`).join('');
+  const markers = [r.std, r.pro].filter(q => q.loan).map(q =>
+    `<span class="marker ${q.pro ? 'pro' : 'std'}" style="left:${Math.min(100, q.ltv / catMax * 100)}%" title="${productName(q.pro)} ${pct(q.ltv, 1)} LTV"></span>`).join('');
+  const cap = r.maxLtv < catMax ? `<span class="cap-line" style="left:${r.maxLtv / catMax * 100}%" title="Specialist cap ${r.maxLtv}%"></span>` : '';
+  return `<div class="gauge">
+    <div class="gauge-head"><span>Pay rate by LTV band${s.loading ? ` · incl. +${pct(s.loading)} Core Flex` : ''}</span><span>Max ${r.maxLtv}% LTV${r.maxLtv < catMax ? ' (specialist)' : ''}</span></div>
+    <div class="gauge-track"><div class="bands">${bands}</div>${markers}${cap}</div>
+    <div class="band-scale">${scale}</div>
+  </div>`;
+}
+
+function detailCol(q, s) {
+  const title = `<h3><span class="dot ${q.pro ? 'pro' : 'std'}"></span>${productName(q.pro)}</h3>`;
+  if (!q.loan) return `<div class="bd-col">${title}<p class="bd-empty">No quote available for this case.</p></div>`;
+  const icrRow = q.icrAchieved === null
+    ? `<dt>Rent needed</dt><dd>${gbp(q.rentForLoan)} pcm</dd>`
+    : `<dt>Rent cover (ICR)</dt><dd class="${q.icrAchieved >= s.icr ? 'pass' : 'failv'}">${q.icrAchieved.toFixed(2)}× <span class="sub">min ${s.icr}×</span></dd>`;
+  return `<div class="bd-col">${title}
+    <dl class="lines">
+      <dt class="grp">Pricing</dt><dd class="grp" hidden></dd>
+      <dt>Margin</dt><dd>${pct(q.margin)}</dd>
+      ${q.loading ? `<dt>Core Flex loading</dt><dd>+${pct(q.loading)}</dd>` : ''}
+      <dt>BoE base rate</dt><dd>${pct(s.base)}</dd>
+      <dt>Pay rate</dt><dd>${pct(q.pay)} <span class="sub">${pct(q.pay / 12, 3)} pcm</span></dd>
+      ${q.pro ? `<dt>Rate after prepaid</dt><dd>${pct(q.eff)}</dd>` : ''}
+      <dt>Stress rate</dt><dd>${pct(q.stress)}</dd>
+      ${icrRow}
+      <dt class="grp">Taken from the advance</dt><dd class="grp" hidden></dd>
+      <dt>Arrangement fee (${pct(CONFIG.fees.arrangementPct)})</dt><dd>${gbp(q.arrangement)}</dd>
+      <dt>Admin fee</dt><dd>${gbp(q.admin)}</dd>
+      <dt>Valuation fee</dt><dd>${gbp(q.valuation)}</dd>
+      ${q.pro ? `<dt>Prepaid interest (${q.years} yr)</dt><dd>${gbp(q.prepaid)}</dd>` : ''}
+      <dt class="total">Net advance</dt><dd class="total">${gbp(q.net)}</dd>
+      <dt class="grp">On redemption</dt><dd class="grp" hidden></dd>
+      <dt>Exit fee (${pct(q.exitPct)})</dt><dd>${gbp(q.exit)}</dd>
+      <dt>Total cost over ${q.years} years</dt><dd>${gbp(q.totalCost)}</dd>
+    </dl>
+  </div>`;
+}
+
+function render() {
+  const s = readState();
+  const notes = [];
+
+  $('cf-sum').textContent = s.cf.on
+    ? (s.cf.capped ? `Capped from +${pct(s.cf.raw)}` : `Total loading · cap +${pct(CONFIG.coreFlex.cap)}`)
+    : 'Standard pricing';
+  $('cf-total').textContent = '+' + pct(s.loading);
+  $('cf-total').classList.toggle('on', s.loading > 0);
+
+  const gridName = s.cat === 'residential' ? 'buy-to-let' : 'commercial';
+  $('mix-hint').textContent = `Priced on the ${gridName} grid, up to ${CONFIG.limits.maxLtv[s.cat]}% LTV.`;
+  const propName = s.kind === 'mixed' ? `Mixed use (mostly ${s.mix})` : typeName();
+  const meta = `${propName} · ${$('loc').selectedOptions[0].textContent} · ${s.value ? gbp(s.value) : '—'} · ${s.term} years`;
+
+  if (CONFIG.rejected[s.loc]) {
+    $('hero').innerHTML = `<div class="hero-top"><span class="eyebrow">Indicative quote</span><span class="hero-meta">${meta}</span></div>
+      <div class="hero-stop"><b>Outside TAB's lending area</b><span>TAB does not lend on ${CONFIG.rejected[s.loc]}. Accepted areas are England, Wales and mainland Scotland.</span></div>`;
+    $('alerts').innerHTML = '';
+    $('breakdown').hidden = true;
+    return;
+  }
+  if (s.value <= 0) {
+    $('hero').innerHTML = `<div class="hero-top"><span class="eyebrow">Indicative quote</span></div>
+      <div class="hero-stop"><b>Enter a property value</b><span>Add the property value to see a quote.</span></div>`;
+    $('alerts').innerHTML = '';
+    $('breakdown').hidden = true;
+    return;
+  }
+
+  const r = calculate(s);
+  const lead = (r.pro.loan || 0) > (r.std.loan || 0) ? 'pro' : 'std';
+  $('hero').innerHTML = `
+    <div class="hero-top"><span class="eyebrow">Indicative quote</span><span class="hero-meta">${meta}</span></div>
+    <div class="products">${heroProduct(r.std, s, lead === 'std' && r.std.loan > 0 && r.pro.loan !== r.std.loan)}${heroProduct(r.pro, s, lead === 'pro')}</div>
+    ${gauge(r, s)}`;
+
+  $('breakdown').hidden = false;
+  $('breakdown').innerHTML = `<div class="breakdown-head"><h2>Full breakdown</h2><span class="hint">Interest only · ${s.term}-year term</span></div>
+    <div class="bd-cols">${detailCol(r.std, s)}${detailCol(r.pro, s)}</div>`;
+
+  // Notes
+  const capKey = s.loc === 'london' ? 'london' : 'other';
+  const maxVal = CONFIG.maxValue[capKey][s.cat];
+  if (s.tier) notes.push(note('warn', `Specialist asset · Tier ${s.tier}`, `Maximum ${CONFIG.specialistMaxLtv}% LTV unless credit agrees to go higher. The +${pct(CONFIG.coreFlex.tier[s.tier])} specialist loading is counted once in the Core Flex total.`));
+  if (s.cf.capped) notes.push(note('warn', 'Loading capped', `Adjustments add up to +${pct(s.cf.raw)}, so the total is capped at +${pct(CONFIG.coreFlex.cap)}.`));
+  if (s.value < CONFIG.limits.minValue) notes.push(note('warn', 'Below minimum property value', `The minimum property value is ${gbp(CONFIG.limits.minValue)}.`));
+  if (s.value > maxVal) notes.push(note('warn', 'Above standard property value limit', `The standard limit for this property is ${gbp(maxVal)}. Larger cases go to credit for referral.`));
+  const biggest = Math.max(r.std.loan || 0, r.pro.loan || 0);
+  if (biggest > CONFIG.coreFlex.pricingReferral && biggest <= CONFIG.limits.referral) notes.push(note('warn', 'May need Pricing Committee', `Loans over ${gbp(CONFIG.coreFlex.pricingReferral)} may be referred to Pricing Committee.`));
+  if (biggest > CONFIG.limits.referral) notes.push(note('warn', 'Referral needed', `Loans over ${gbp(CONFIG.limits.referral)} need credit committee approval (maximum ${gbp(CONFIG.limits.maxLoan)}).`));
+  if (s.rent <= 0) {
+    notes.push(note('info', 'Rent needed for maximum LTV', `Mortgage: ${gbp(r.std.rentForMax)} a month. Mortgage Pro: ${gbp(r.pro.rentForMax)} a month. Both to borrow ${gbp(r.startLoan)} at ${r.maxLtv}% LTV.`));
+  } else if (r.pro.loan > (r.std.loan || 0) && r.std.limited === 'icr') {
+    notes.push(note('info', `Mortgage Pro lends ${gbp(r.pro.loan - (r.std.loan || 0))} more on this rent`, `Prepaying interest lowers the stress rate. The standard mortgage needs ${gbp(r.std.rentForMax)} a month to reach ${r.maxLtv}% LTV.`));
+  }
+  $('alerts').innerHTML = notes.join('');
+}
+
+// ---------- Events ----------
+for (const id of ['value', 'rent']) {
+  $(id).addEventListener('blur', e => { const n = num(e.target.value); e.target.value = n ? n.toLocaleString('en-GB') : ''; });
+}
+const stepProps = d => { $('props').value = Math.min(50, Math.max(1, (parseInt($('props').value, 10) || 1) + d)); render(); };
+$('props-down').addEventListener('click', () => stepProps(-1));
+$('props-up').addEventListener('click', () => stepProps(1));
+document.querySelectorAll('input[name="cat"]').forEach(el => el.addEventListener('change', () => { fillTypes(); syncTierFromType(); }));
+$('ptype').addEventListener('change', syncTierFromType);
+// 'input' fires before the form re-renders, so the manual choice is recorded first.
+$('cf-on').addEventListener('input', e => { cfManual = e.target.checked; });
+// Only one specialist tier applies at a time.
+$('cf-tier1').addEventListener('change', e => { if (e.target.checked) $('cf-tier2').checked = false; });
+$('cf-tier2').addEventListener('change', e => { if (e.target.checked) $('cf-tier1').checked = false; });
+$('form').addEventListener('input', render);
+$('form').addEventListener('change', render);
+$('form').addEventListener('submit', e => e.preventDefault());
+
+// Settings drawer
+let lastFocus = null;
+function openSettings() {
+  lastFocus = document.activeElement;
+  renderSettings();
+  $('settings').hidden = $('scrim').hidden = false;
+  $('open-settings').setAttribute('aria-expanded', 'true');
+  $('settings').focus();
+}
+function closeSettings() {
+  $('settings').hidden = $('scrim').hidden = true;
+  $('open-settings').setAttribute('aria-expanded', 'false');
+  $('reset-note').textContent = '';
+  if (lastFocus) lastFocus.focus();
+}
+$('open-settings').addEventListener('click', openSettings);
+$('close-settings').addEventListener('click', closeSettings);
+$('scrim').addEventListener('click', closeSettings);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('settings').hidden) closeSettings(); });
+
+$('settings-body').addEventListener('input', e => {
+  const el = e.target;
+  if (!el.dataset.path) return;
+  const v = parseFloat(el.value);
+  if (!isFinite(v)) return; // ignore a half-typed value
+  setPath(CONFIG, el.dataset.path, v);
+  const row = el.closest('.srow');
+  const changed = [...row.querySelectorAll('input')].some(i => getPath(CONFIG, i.dataset.path) !== getPath(DEFAULTS, i.dataset.path));
+  row.classList.toggle('changed', changed);
+  updateChangedCount(saveSettings());
+  refreshLabels();
+  syncTierFromType();
+  render();
+});
+
+$('reset-settings').addEventListener('click', () => {
+  for (const p of allPaths()) setPath(CONFIG, p, getPath(DEFAULTS, p));
+  updateChangedCount(saveSettings());
+  renderSettings();
+  refreshLabels();
+  syncTierFromType();
+  render();
+  $('reset-note').textContent = 'Reset to rate card values.';
+});
+
+loadSettings();
+updateChangedCount(allPaths().filter(p => getPath(CONFIG, p) !== getPath(DEFAULTS, p)).length);
+refreshLabels();
+fillTypes();
+syncTierFromType();
+render();
+</script>
+</html>
