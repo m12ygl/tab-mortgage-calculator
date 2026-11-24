@@ -143,6 +143,14 @@ select.ctrl { appearance: none; padding-right: 34px; background-image: linear-gr
 /* Quote panel */
 .results { display: grid; gap: 16px; min-width: 0; position: sticky; top: calc(16px + env(safe-area-inset-top, 0px)); }
 @media (max-width: 960px) { .results { position: static; } }
+.toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary:hover { filter: brightness(1.06); border-color: var(--brand); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.copy-status { font-size: 13px; font-weight: 600; color: var(--good); }
+.copy-fallback { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; display: grid; gap: 8px; }
+.copy-fallback p { margin: 0; }
+.copy-fallback textarea { width: 100%; font-family: var(--mono); font-size: 12px; line-height: 1.5; background: var(--sunk); border: 1px solid var(--line); border-radius: 8px; padding: 10px; resize: vertical; }
 .hero { position: relative; overflow: hidden; background: var(--forest); color: var(--on-forest); border-radius: 22px; padding: 22px 24px 24px; display: grid; gap: 22px; border: 1px solid var(--forest-line); }
 .hero::before { content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; height: 140%; background: radial-gradient(closest-side, rgba(134, 217, 166, .16), transparent); pointer-events: none; }
 .hero > * { position: relative; }
@@ -378,8 +386,19 @@ dl.lines .sub { color: var(--muted); font-weight: 500; font-size: 12px; }
       <p class="hint" id="assume-line"></p>
     </form>
 
-    <section class="results" aria-live="polite">
-      <div class="hero" id="hero"></div>
+    <section class="results">
+      <div class="toolbar">
+        <span class="copy-status" id="copy-status" role="status"></span>
+        <button type="button" class="btn primary" id="copy-notes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy for sales notes
+        </button>
+      </div>
+      <div class="copy-fallback" id="copy-fallback" hidden>
+        <p class="hint">Your browser blocked copying. The text below is selected: press Ctrl+C, or ⌘C on a Mac.</p>
+        <textarea id="copy-text" rows="14" readonly aria-label="Sales note text"></textarea>
+      </div>
+      <div class="hero" id="hero" aria-live="polite"></div>
       <div class="notes" id="alerts"></div>
       <div class="breakdown" id="breakdown"></div>
     </section>
@@ -783,9 +802,99 @@ function detailCol(q, s) {
   </div>`;
 }
 
+// ---------- Sales note ----------
+let lastQuote = null; // { s, r } from the latest successful render
+
+const LOADING_NAMES = {
+  ccj: 'CCJ', arrears: 'Mortgage arrears', offshore: 'Offshore / foreign national', complex: 'Complex ownership',
+  nopg: 'No personal guarantee', nonstd: 'Non-standard construction', refurb: 'Light refurbishment',
+};
+const ESG_NAMES = { 'esg-epc': 'EPC A–C', 'esg-sus': 'Sustainability', 'esg-soc': 'Social enterprise' };
+
+function noteProduct(q, s) {
+  const name = productName(q.pro);
+  if (!q.loan) {
+    return q.limited === 'icr_fail'
+      ? `${name}: not viable. Rent does not pass the ${s.icr}x rent test; needs ${gbp(q.rentForMax)} pcm for max LTV.`
+      : `${name}: not viable at the ${gbp(CONFIG.limits.minLoan)} minimum loan.`;
+  }
+  const limit = q.limited === 'icr' ? 'rent limited' : 'max LTV';
+  const rateParts = [`${pct(q.margin)} margin`];
+  if (q.loading) rateParts.push(`${pct(q.loading)} Core Flex`);
+  rateParts.push(`${pct(s.base)} base`);
+  const lines = [
+    `${name}: ${gbp(q.loan)} gross at ${pct(q.ltv, 1)} LTV (${limit})`,
+    `  Pay rate ${pct(q.pay)} pa (${rateParts.join(' + ')})${q.pro ? `, ${pct(q.eff)} after prepaid` : ''}`,
+    `  Monthly interest ${gbp(q.monthly)}`,
+    q.icrAchieved === null
+      ? `  Rent needed ${gbp(q.rentForLoan)} pcm (ICR ${s.icr}x at ${pct(q.stress)} stress)`
+      : `  ICR ${q.icrAchieved.toFixed(2)}x at ${pct(q.stress)} stress (min ${s.icr}x)`,
+    `  Fees: arrangement ${gbp(q.arrangement)}, admin ${gbp(q.admin)}, valuation ${gbp(q.valuation)}${q.pro ? `, prepaid interest ${gbp(q.prepaid)} (${q.years} yr)` : ''}`,
+    `  Net advance ${gbp(q.net)}`,
+    `  Exit fee ${pct(q.exitPct)} (${gbp(q.exit)}) · total cost over ${q.years} years ${gbp(q.totalCost)}`,
+  ];
+  return lines.join('\n');
+}
+
+function salesNote() {
+  if (!lastQuote) return '';
+  const { s, r } = lastQuote;
+  const today = new Date().toLocaleDateString('en-GB');
+  const property = s.kind === 'mixed' ? `Mixed use (mostly ${s.mix} by sq ft)` : typeName();
+  const loadings = CF_FLAGS.filter(k => $('cf-' + k).checked).map(k => LOADING_NAMES[k]);
+  if (s.tier) loadings.push(`Specialist Tier ${s.tier}`);
+  const pricing = s.cf.on
+    ? `Core Flex +${pct(s.loading)}${loadings.length ? ` (${loadings.join(', ')})` : ''}${s.cf.capped ? ` (capped from +${pct(s.cf.raw)})` : ''}`
+    : 'Standard pricing';
+  const esg = Object.keys(ESG_NAMES).filter(id => $(id).checked).map(id => ESG_NAMES[id]);
+  const alerts = [...document.querySelectorAll('#alerts .note b')].map(b => b.textContent);
+  const changed = allPaths().filter(p => getPath(CONFIG, p) !== getPath(DEFAULTS, p)).length;
+
+  const out = [
+    `TAB Mortgage indicative quote (${today})`,
+    `Property: ${property}, ${$('loc').selectedOptions[0].textContent}`,
+    `Value ${gbp(s.value)} · Rent ${s.rent > 0 ? gbp(s.rent) + ' pcm' : 'not given'} · Term ${s.term} years · ${s.props} ${s.props === 1 ? 'property' : 'properties'}`,
+    `Pricing: ${pricing}`,
+  ];
+  if (esg.length) out.push(`ESG discounts: ${esg.join(', ')} (exit fee −${pct(s.esgDiscount)})`);
+  out.push('', noteProduct(r.std, s), '', noteProduct(r.pro, s));
+  if (alerts.length) out.push('', 'Notes: ' + alerts.join('; '));
+  if (changed) out.push('', `Custom settings in use: ${changed} ${changed === 1 ? 'value differs' : 'values differ'} from the rate card.`);
+  out.push('', 'Indicative only. Subject to valuation, underwriting and credit approval.');
+  return out.join('\n');
+}
+
+function showCopyFallback(text) {
+  $('copy-fallback').hidden = false;
+  $('copy-text').value = text;
+  $('copy-text').focus();
+  $('copy-text').select();
+  $('copy-status').textContent = '';
+}
+
+let statusTimer = null;
+$('copy-notes').addEventListener('click', () => {
+  const text = salesNote();
+  if (!text) return;
+  const done = () => {
+    $('copy-fallback').hidden = true;
+    $('copy-status').textContent = 'Copied. Paste it into the sales notes.';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(() => { $('copy-status').textContent = ''; }, 4000);
+  };
+  try {
+    navigator.clipboard.writeText(text).then(done, () => showCopyFallback(text));
+  } catch (e) {
+    showCopyFallback(text);
+  }
+});
+
 function render() {
   const s = readState();
   const notes = [];
+  lastQuote = null;
+  $('copy-notes').disabled = true;
+  $('copy-fallback').hidden = true;
 
   $('cf-sum').textContent = s.cf.on
     ? (s.cf.capped ? `Capped from +${pct(s.cf.raw)}` : `Total loading · cap +${pct(CONFIG.coreFlex.cap)}`)
@@ -840,6 +949,8 @@ function render() {
     notes.push(note('info', `Mortgage Pro lends ${gbp(r.pro.loan - (r.std.loan || 0))} more on this rent`, `Prepaying interest lowers the stress rate. The standard mortgage needs ${gbp(r.std.rentForMax)} a month to reach ${r.maxLtv}% LTV.`));
   }
   $('alerts').innerHTML = notes.join('');
+  lastQuote = { s, r };
+  $('copy-notes').disabled = !(r.std.loan || r.pro.loan);
 }
 
 // ---------- Events ----------
